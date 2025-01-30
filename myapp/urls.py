@@ -12,5 +12,6 @@ urlpatterns = [
     path('friends/', FriendsList.as_view(), name='friends-list'),
     path('messages/<int:user_id>/', MessageList.as_view(), name='message-list'),
     path("search/", views.SearchProfile.as_view(), name="make_search"),
+    path("users/<int:id>/", views.ProfileView.as_view(), name="profiles"),
 ]
 

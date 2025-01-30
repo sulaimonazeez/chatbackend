@@ -104,23 +104,46 @@ class FriendsList(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Retrieve all friends for the logged-in user
+        # Retrieve friends for the logged-in user
         friends = Friends.objects.filter(user=request.user)
-        serializer = FriendsSerializer(friends, many=True)
-        return Response(serializer.data)
+
+        if friends.exists():
+            serializer = FriendsSerializer(friends, many=True)
+            return Response(serializer.data)
         
+        # Check if there is a default user (ID=1) and add them as a friend if no friends exist
+        try:
+            default_user = User.objects.get(id=1)
+            if not Friends.objects.filter(user=request.user, friend=default_user).exists():
+                Friends.objects.create(user=request.user, friend=default_user)
+            friends = Friends.objects.filter(user=request.user)
+            serializer = FriendsSerializer(friends, many=True)
+            return Response(serializer.data)
+        except User.DoesNotExist:
+            return Response({"message": "No friends found and default user does not exist"}, status=404)
+
     def post(self, request):
-      try:
-        id = request.data.get("id")
-        users = User.objects.get(id=int(id))
-        if Friends.objects.filter(friend=users).exists():
-          return Response({"message":"Already in friend list"})
-        else:
-          Friends.objects.create(user=request.user, friend=users)
-          return Response({"message":"Friend to Friend"})
-      except Exception as e:
-        print('Something went wrong', e)
-        return Response({"message":f"Something went wrong: {e}"})
+        try:
+            user_id = request.data.get("id")
+            if not user_id:
+                return Response({"message": "User ID is required"}, status=400)
+
+            try:
+                friend_user = User.objects.get(id=int(user_id))
+            except User.DoesNotExist:
+                return Response({"message": "User not found"}, status=404)
+
+            # Check if friendship already exists
+            if Friends.objects.filter(user=request.user, friend=friend_user).exists():
+                return Response({"message": "Already in friend list"}, status=400)
+
+            # Create a new friendship
+            Friends.objects.create(user=request.user, friend=friend_user)
+            return Response({"message": "Friend added successfully"}, status=201)
+
+        except Exception as e:
+            return Response({"message": f"Something went wrong: {str(e)}"}, status=500)
+
 
   
 
@@ -157,3 +180,19 @@ class MessageList(APIView):
             serializer = MessageSerializer(message)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response({'error': 'Message content cannot be empty'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id):
+        try:
+            users = User.objects.get(id=id)
+            return Response({"username":users.username, "status": "Online", "email":users.email, "firstname":users.first_name, "lastname": users.last_name
+                             
+                             })
+        except User.DoesNotExist:
+            return Response({"error": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
